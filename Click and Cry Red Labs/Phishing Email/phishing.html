@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Click & Cry - Simulation de Phishing</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f0f0f0;
+      margin: 0;
+      padding: 20px;
+    }
+    .inbox {
+      max-width: 600px;
+      margin: 0 auto;
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+    .email {
+      background: #eef;
+      padding: 15px;
+      margin-bottom: 10px;
+      border-radius: 5px;
+      cursor: pointer;
+      user-select: none;
+      transition: background-color 0.3s ease, box-shadow 0.3s ease;
+    }
+    .email:hover {
+      background-color: #dde6ff;
+      box-shadow: 0 2px 8px rgba(0,0,255,0.15);
+    }
+    .hidden {
+      display: none;
+    }
+    .overlay {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.8);
+      color: white;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      text-align: center;
+      font-size: 1.2em;
+      z-index: 1000;
+    }
+    #decryptPassword {
+      padding: 8px;
+      margin-top: 10px;
+      font-size: 1em;
+      border-radius: 4px;
+      border: none;
+      width: 250px;
+    }
+    button {
+      margin-top: 15px;
+      padding: 10px 20px;
+      font-size: 1em;
+      border: none;
+      border-radius: 5px;
+      background-color: #3366cc;
+      color: white;
+      cursor: pointer;
+      transition: background-color 0.3s ease;
+    }
+    button:hover {
+      background-color: #274a9f;
+    }
+    select {
+      margin-bottom: 15px;
+      padding: 6px;
+      font-size: 1em;
+      border-radius: 4px;
+      border: 1px solid #ccc;
+      cursor: pointer;
+    }
+    a.attachment-link {
+      display: inline-block;
+      margin-top: 10px;
+      color: #3366cc;
+      text-decoration: underline;
+      cursor: pointer;
+    }
+    /* Close button on email content */
+    #emailContent > button.closeBtn {
+      float: right;
+      background: none;
+      border: none;
+      font-size: 1.5em;
+      cursor: pointer;
+      color: #666;
+    }
+    #emailContent > button.closeBtn:hover {
+      color: #333;
+    }
+  </style>
+</head>
+<body>
+  <div class="inbox">
+    <select id="languageSelector" onchange="setLanguage()">
+      <option value="en">English</option>
+      <option value="fr" selected>Français</option>
+    </select>
+
+    <h1 id="inboxTitle">📥 Votre boîte de réception</h1>
+
+    <div class="email" onclick="openEmail()">
+      <h2 id="emailSubject">⚠️ Urgent : Facture en retard</h2>
+      <p id="emailFrom">De : facturation@fauxfournisseur.com</p>
+      <p id="emailPreview">Objet : Veuillez vérifier la facture ci-jointe.</p>
+    </div>
+  </div>
+
+  <div id="emailContent" class="hidden" style="max-width:600px; margin: 20px auto; background:white; padding:20px; border-radius:8px; position: relative;">
+    <button class="closeBtn" onclick="closeEmail()" title="Retour">&times;</button>
+    <h2 id="emailHeader">Facturation Faux Fournisseur</h2>
+    <p id="emailGreeting">Cher utilisateur,</p>
+    <p id="emailBody">Veuillez trouver ci-joint votre facture en retard. Cliquez ci-dessous pour la consulter.</p>
+    
+    <button id="downloadBtn" onclick="downloadFakeFile()">Télécharger Facture.txt</button>
+    <p><strong id="attachmentLabel">Pièce jointe :</strong> 
+      <a href="#" id="attachmentLink" class="attachment-link" download>Facture.txt</a>
+    </p>
+    
+    <div id="loadingMessage" class="hidden" style="margin-top: 15px;">
+      <p id="loadingText">Chargement du document...</p>
+    </div>
+  </div>
+
+  <div id="ransomwareScreen" class="hidden">
+    <div class="overlay">
+      <h1 id="ransomTitle">💀 Vos fichiers ont été cryptés 💀</h1>
+      <p id="ransomDesc">Tous vos documents, photos et données sont verrouillés.</p>
+      <p id="ransomDemand">Envoyez 0.1 BTC à l'adresse ci-dessous ou perdez tout.</p>
+      <code>1FfmbHfnpaZjKFvyi1okTjJJusN455paPH</code>
+      <p><em id="countdown">Compte à rebours : 48:00:00</em></p>
+      <input type="password" id="decryptPassword" placeholder="Entrez la clé de décryptage" />
+      <button onclick="attemptDecrypt()" id="decryptBtn">Décrypter les fichiers</button>
+      <p id="decryptMessage"></p>
+    </div>
+  </div>
+
+  <div id="lesson" class="hidden">
+    <div class="overlay">
+      <h2 id="lessonTitle">✅ Simulation terminée</h2>
+      <p id="lessonText">Ceci est une simulation de phishing. Cliquer sur des pièces jointes inconnues peut conduire à de véritables attaques ransomware. Vérifiez toujours l'expéditeur et le type de fichier.</p>
+      <button onclick="window.location.reload()" id="returnBtn">Retour à la boîte de réception</button>
+    </div>
+  </div>
+
+  <script>
+    let currentLang = 'fr';
+    const decryptionKey = 'letmein123';
+
+    // Durée initiale du compte à rebours en secondes (48 heures)
+    let timeLeft = 48 * 3600;
+
+    function updateCountdown() {
+      const countdownElement = document.getElementById('countdown');
+
+      if (timeLeft <= 0) {
+        countdownElement.textContent = currentLang === 'en' ? "Time's up!" : "Temps écoulé !";
+        clearInterval(timerInterval);
+        return;
+      }
+
+      const hours = Math.floor(timeLeft / 3600);
+      const minutes = Math.floor((timeLeft % 3600) / 60);
+      const seconds = timeLeft % 60;
+
+      countdownElement.textContent = (currentLang === 'en' ? "Countdown: " : "Compte à rebours : ") 
+        + `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2,'0')}:${String(seconds).padStart(2,'0')}`;
+
+      timeLeft--;
+    }
+
+    let timerInterval;
+
+    function openEmail() {
+      document.querySelector('.inbox').classList.add('hidden');
+      document.getElementById('emailContent').classList.remove('hidden');
+    }
+
+    function closeEmail() {
+      document.querySelector('.inbox').classList.remove('hidden');
+      document.getElementById('emailContent').classList.add('hidden');
+    }
+
+    function generateAttachment() {
+      const content = currentLang === 'en'
+        ? "This is a fake invoice document.\nPlease ignore this file."
+        : "Ceci est un faux document de facture.\nVeuillez ignorer ce fichier.";
+      const blob = new Blob([content], { type: "text/plain" });
+      return URL.createObjectURL(blob);
+    }
+
+    function downloadFakeFile() {
+      const url = generateAttachment();
+
+      // Trigger the download programmatically
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = currentLang === 'en' ? "Invoice.txt" : "Facture.txt";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+
+      // Show loading message then ransomware screen
+      document.getElementById("loadingMessage").classList.remove("hidden");
+      setTimeout(() => {
+        document.getElementById("loadingMessage").classList.add("hidden");
+        document.getElementById("emailContent").classList.add("hidden");
+        document.getElementById("ransomwareScreen").classList.remove("hidden");
+
+        // Démarrer le compte à rebours dès que l'écran ransomware apparaît
+        timeLeft = 48 * 3600; // reset timer
+        updateCountdown(); // update tout de suite
+        timerInterval = setInterval(updateCountdown, 1000);
+
+      }, 4000); // 4 secondes
+    }
+
+    function attemptDecrypt() {
+      const input = document.getElementById('decryptPassword').value;
+      const message = document.getElementById('decryptMessage');
+      if(input === decryptionKey) {
+        message.style.color = 'lightgreen';
+        message.textContent = currentLang === 'en' ? 
+          "Files decrypted successfully! Simulation complete." : 
+          "Fichiers décryptés avec succès ! Simulation terminée.";
+        clearInterval(timerInterval);
+        setTimeout(() => {
+          // Instead of redirecting, show lesson screen
+          document.getElementById("ransomwareScreen").classList.add("hidden");
+          document.getElementById("lesson").classList.remove("hidden");
+        }, 1500);
+      } else {
+        message.style.color = 'red';
+        message.textContent = currentLang === 'en' ? 
+          "Incorrect key. Please try again." : 
+          "Clé incorrecte. Veuillez réessayer.";
+      }
+    }
+
+    function setLanguage() {
+      const langSelector = document.getElementById('languageSelector');
+      currentLang = langSelector.value;
+
+      if(currentLang === 'en') {
+        document.getElementById('inboxTitle').textContent = "📥 Your Inbox";
+        document.getElementById('emailSubject').textContent = "⚠️ Urgent: Overdue Invoice";
+        document.getElementById('emailFrom').textContent = "From: billing@fakevendor.com";
+        document.getElementById('emailPreview').textContent = "Subject: Please check the attached invoice.";
+
+        document.getElementById('emailHeader').textContent = "Fake Vendor Billing";
+        document.getElementById('emailGreeting').textContent = "Dear User,";
+        document.getElementById('emailBody').textContent = "Please find your overdue invoice attached. Click below to view it.";
+        document.getElementById('downloadBtn').textContent = "Download Invoice.txt";
+        document.getElementById('attachmentLabel').textContent = "Attachment:";
+        document.getElementById('attachmentLink').textContent = "Invoice.txt";
+        document.getElementById('loadingText').textContent = "Loading document...";
+
+        document.getElementById('ransomTitle').textContent = "💀 Your files have been encrypted 💀";
+        document.getElementById('ransomDesc').textContent = "All your documents, photos, and data are locked.";
+        document.getElementById('ransomDemand').textContent = "Send 0.1 BTC to the address below or lose everything.";
+        document.getElementById('decryptPassword').placeholder = "Enter decryption key";
+        document.getElementById('decryptBtn').textContent = "Decrypt Files";
+
+        document.getElementById('lessonTitle').textContent = "✅ Simulation Complete";
+        document.getElementById('lessonText').textContent = "This is a phishing simulation. Clicking unknown attachments can lead to real ransomware attacks. Always verify the sender and file type.";
+        document.getElementById('returnBtn').textContent = "Back to Inbox";
+      } else {
+        document.getElementById('inboxTitle').textContent = "📥 Votre boîte de réception";
+        document.getElementById('emailSubject').textContent = "⚠️ Urgent : Facture en retard";
+        document.getElementById('emailFrom').textContent = "De : facturation@fauxfournisseur.com";
+        document.getElementById('emailPreview').textContent = "Objet : Veuillez vérifier la facture ci-jointe.";
+
+        document.getElementById('emailHeader').textContent = "Facturation Faux Fournisseur";
+        document.getElementById('emailGreeting').textContent = "Cher utilisateur,";
+        document.getElementById('emailBody').textContent = "Veuillez trouver ci-joint votre facture en retard. Cliquez ci-dessous pour la consulter.";
+        document.getElementById('downloadBtn').textContent = "Télécharger Facture.txt";
+        document.getElementById('attachmentLabel').textContent = "Pièce jointe :";
+        document.getElementById('attachmentLink').textContent = "Facture.txt";
+        document.getElementById('loadingText').textContent = "Chargement du document...";
+
+        document.getElementById('ransomTitle').textContent = "💀 Vos fichiers ont été cryptés 💀";
+        document.getElementById('ransomDesc').textContent = "Tous vos documents, photos et données sont verrouillés.";
+        document.getElementById('ransomDemand').textContent = "Envoyez 0.1 BTC à l'adresse ci-dessous ou perdez tout.";
+        document.getElementById('decryptPassword').placeholder = "Entrez la clé de décryptage";
+        document.getElementById('decryptBtn').textContent = "Décrypter les fichiers";
+
+        document.getElementById('lessonTitle').textContent = "✅ Simulation terminée";
+        document.getElementById('lessonText').textContent = "Ceci est une simulation de phishing. Cliquer sur des pièces jointes inconnues peut conduire à de véritables attaques ransomware. Vérifiez toujours l'expéditeur et le type de fichier.";
+        document.getElementById('returnBtn').textContent = "Retour à la boîte de réception";
+      }
+    }
+
+    // Initialize the language on load
+    window.onload = () => {
+      setLanguage();
+    };
+  </script>
+</body>
+</html>
